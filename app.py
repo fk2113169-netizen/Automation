@@ -98,53 +98,36 @@ with cols[3]:
     </div>
     """, unsafe_allow_html=True)
 
-# Grid Layout for App Status & Interactive Simulator
+# Grid Layout for Product Catalog & Interactive Simulator
 left_col, right_col = st.columns([1, 1.3])
 
 with left_col:
-    st.subheader("⚙️ System Status")
+    st.subheader("📦 Active Product Catalog")
+    st.caption("Used by the AI engine to match product inventory, unit prices, and calculate order totals.")
     
-    status_card = """
-    <div class="glass-card" style="margin-bottom: 15px;">
-        <h4 style="margin-top:0; color:#38bdf8;">🌐 Webhook Endpoints</h4>
-        <div style="font-size:0.9rem; line-height:1.6;">
-            <b>FastAPI Port:</b> <code>8000</code><br>
-            <b>WhatsApp Webhook:</b> <code>/webhooks/whatsapp</code> (POST)<br>
-            <b>Voice Webhook:</b> <code>/webhooks/voice</code> (POST)<br>
-            <b>Voice Callback:</b> <code>/webhooks/voice/respond</code> (POST)<br>
-        </div>
-    </div>
-    """
-    st.markdown(status_card, unsafe_allow_html=True)
-    
-    # Check Twilio Configuration Status
-    twilio_configured = False
-    twilio_sid = db.get_setting("twilio_account_sid")
-    if twilio_sid and len(twilio_sid) > 10 and "your_twilio" not in twilio_sid:
-        twilio_configured = True
+    products = db.get_all_products()
+    if products:
+        import pandas as pd
+        cat_df = []
+        for p in products:
+            cat_df.append({
+                "Item Name": p["name"],
+                "Unit Price": f"Rs. {p['price']:,.2f}",
+                "Description": p["description"]
+            })
+        st.dataframe(pd.DataFrame(cat_df), use_container_width=True, hide_index=True)
+    else:
+        st.info("Product catalog is empty. Add items under Settings.")
         
-    status_color = "#34d399" if twilio_configured else "#fbbf24"
-    status_text = "Live (Twilio Integration Connected)" if twilio_configured else "Simulation Mode (No Twilio API Keys)"
-    
-    twilio_card = f"""
-    <div class="glass-card">
-        <h4 style="margin-top:0; color:{status_color};">📞 Twilio WhatsApp Channel</h4>
-        <div style="font-size:0.9rem; line-height:1.6;">
-            <b>Status:</b> {status_text}<br>
-            <b>Account SID:</b> <code>{twilio_sid[:8] if twilio_sid else 'None'}...</code><br>
-            <b>Sender Number:</b> <code>{db.get_setting("twilio_phone_number") or 'whatsapp:+14155238886'}</code><br>
-        </div>
-    </div>
-    """
-    st.markdown(twilio_card, unsafe_allow_html=True)
+    st.write("---")
 
     # Simulator Instructions
     st.markdown("""
-    ### 🚀 Testing instructions
-    Use the **Automation Simulator** on the right to test how the LLM processes messages.
+    ### 🚀 Testing Instructions
+    Use the **Automation Simulator** on the right to test how the AI processes messages.
     - Select **WhatsApp Chat** to simulate a conversation.
     - Try typing: _"I want to book 5 silk threads and deliver it to Office 402, Block A, Karachi."_
-    - The AI will automatically extract the order, query the catalog prices, calculate the total cost, create a **Pending** order in the database, and return a **JazzCash** payment link simulation!
+    - The AI will automatically extract the order details, query catalog prices, calculate the total cost, create a **Pending** order in the database, and return a simulated **JazzCash** payment invoice!
     """)
 
 with right_col:
@@ -212,16 +195,13 @@ with right_col:
             if not sim_voice_trans.strip():
                 st.warning("Please enter transcription.")
             else:
-                with st.spinner("Processing speech and creating response TwiML..."):
+                with st.spinner("Processing speech and creating response..."):
                     # Process call
                     twiml_res = voice_handler.process_voice_input_and_respond(
                         caller_number=sim_voice_phone,
                         transcription=sim_voice_trans,
                         call_sid="SIMULATED_CALL_12345"
                     )
-                    
-                    st.markdown("### 📞 Call Routing TwiML Response")
-                    st.code(twiml_res, language="xml")
                     
                     # Extract raw text spoken by Polly
                     speech_text_match = [line for line in twiml_res.split("\n") if "<Say" in line]
